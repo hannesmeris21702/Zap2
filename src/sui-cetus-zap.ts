@@ -177,14 +177,17 @@ async function executeZap() {
     const coinTypeA = pool.coinTypeA;
     const coinTypeB = pool.coinTypeB;
 
-    const coinsA = await provider.getCoins({
-      owner: walletAddress,
-      coinType: coinTypeA,
-    });
-    const coinsB = await provider.getCoins({
-      owner: walletAddress,
-      coinType: coinTypeB,
-    });
+    // Fetch coin balances concurrently for better performance
+    const [coinsA, coinsB] = await Promise.all([
+      provider.getCoins({
+        owner: walletAddress,
+        coinType: coinTypeA,
+      }),
+      provider.getCoins({
+        owner: walletAddress,
+        coinType: coinTypeB,
+      }),
+    ]);
 
     const balanceA = coinsA.data.reduce(
       (sum, coin) => sum.add(new BN(coin.balance)),
@@ -207,8 +210,8 @@ async function executeZap() {
     const tickSpacing = Number(pool.tickSpacing);
 
     // Calculate tick offset based on RANGE_PERCENT
-    // Use absolute tick distance, not percentage of tick value (which fails for negative ticks)
-    const tickOffset = Math.floor(Math.abs(currentTick) * (config.rangePercent / 100));
+    // Use tick distance relative to zero, not absolute value (to handle negative ticks correctly)
+    const tickOffset = Math.floor(Math.abs(currentTick * (config.rangePercent / 100)));
     
     // Ensure the offset respects tick spacing
     const alignedOffset = Math.floor(tickOffset / tickSpacing) * tickSpacing;
@@ -254,8 +257,10 @@ async function executeZap() {
       curSqrtPrice
     );
 
-    const amountA = fixAmountA ? coinAmount.toNumber() : liquidityInput.tokenMaxA.toNumber();
-    const amountB = fixAmountA ? liquidityInput.tokenMaxB.toNumber() : coinAmount.toNumber();
+    // Convert to numbers safely - SDK expects number or string
+    // Use toString() to avoid issues with large numbers
+    const amountA = fixAmountA ? coinAmount.toString() : liquidityInput.tokenMaxA.toString();
+    const amountB = fixAmountA ? liquidityInput.tokenMaxB.toString() : coinAmount.toString();
 
     console.log(`Calculated amounts - A: ${amountA}, B: ${amountB}`);
 
