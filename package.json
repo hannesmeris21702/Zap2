@@ -1,0 +1,31 @@
+{
+  "name": "sui-cetus-zap-bot",
+  "version": "1.0.0",
+  "description": "SUI Mainnet Cetus CLMM ZAP Bot",
+  "main": "dist/sui-cetus-zap.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/sui-cetus-zap.js",
+    "dev": "ts-node src/sui-cetus-zap.ts"
+  },
+  "keywords": [
+    "sui",
+    "cetus",
+    "defi",
+    "zap"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@mysten/sui.js": "^0.54.1",
+    "@cetusprotocol/cetus-sui-clmm-sdk": "^2.0.0",
+    "dotenv": "^16.4.5",
+    "bn.js": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "@types/bn.js": "^5.1.5",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2"
+  }
+}
