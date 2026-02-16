@@ -87,6 +87,7 @@ interface Config {
   privateKey: string;
   poolId: string;
   rangePercent: number;
+  slippageTolerance: number;
 }
 
 /**
@@ -97,6 +98,7 @@ function loadConfig(): Config {
   const privateKey = process.env.PRIVATE_KEY;
   const poolId = process.env.POOL_ID;
   const rangePercent = process.env.RANGE_PERCENT;
+  const slippageTolerance = process.env.SLIPPAGE_TOLERANCE || '0.05';
 
   if (!suiRpcUrl) {
     throw new Error('SUI_RPC_URL is required');
@@ -111,11 +113,18 @@ function loadConfig(): Config {
     throw new Error('RANGE_PERCENT is required');
   }
 
+  // Validate private key format (hex string, 64 characters for 32-byte key)
+  const cleanPrivateKey = privateKey.replace(/^0x/, '');
+  if (!/^[0-9a-fA-F]{64}$/.test(cleanPrivateKey)) {
+    throw new Error('PRIVATE_KEY must be a 64-character hex string (32 bytes)');
+  }
+
   return {
     suiRpcUrl,
-    privateKey,
+    privateKey: cleanPrivateKey,
     poolId,
     rangePercent: parseFloat(rangePercent),
+    slippageTolerance: parseFloat(slippageTolerance),
   };
 }
 
@@ -195,16 +204,23 @@ async function executeZap() {
 
     // Step 7: Calculate active range using RANGE_PERCENT around current price
     const currentTick = pool.current_tick_index;
-    const tickSpacing = pool.tickSpacing;
+    const tickSpacing = Number(pool.tickSpacing);
+
+    // Calculate tick offset based on RANGE_PERCENT
+    // Use absolute tick distance, not percentage of tick value (which fails for negative ticks)
+    const tickOffset = Math.floor(Math.abs(currentTick) * (config.rangePercent / 100));
+    
+    // Ensure the offset respects tick spacing
+    const alignedOffset = Math.floor(tickOffset / tickSpacing) * tickSpacing;
 
     // Use TickMath to get proper tick indices based on current tick and range
     const lowerTick = TickMath.getPrevInitializableTickIndex(
-      new BN(currentTick).sub(new BN(Math.floor(currentTick * (config.rangePercent / 100)))).toNumber(),
-      new BN(tickSpacing).toNumber()
+      currentTick - alignedOffset,
+      tickSpacing
     );
     const upperTick = TickMath.getNextInitializableTickIndex(
-      new BN(currentTick).add(new BN(Math.floor(currentTick * (config.rangePercent / 100)))).toNumber(),
-      new BN(tickSpacing).toNumber()
+      currentTick + alignedOffset,
+      tickSpacing
     );
 
     console.log(`Calculated tick range: [${lowerTick}, ${upperTick}]`);
@@ -212,18 +228,18 @@ async function executeZap() {
 
     // Step 8: Calculate liquidity and amounts for ZAP
     const curSqrtPrice = new BN(pool.current_sqrt_price);
-    const slippage = 0.05; // 5% slippage tolerance
+    const slippage = config.slippageTolerance;
 
     // Determine which token has a balance and calculate accordingly
-    let fix_amount_a = true;
+    let fixAmountA = true;
     let coinAmount = balanceA;
 
     if (balanceA.isZero() && !balanceB.isZero()) {
-      fix_amount_a = false;
+      fixAmountA = false;
       coinAmount = balanceB;
     } else if (!balanceA.isZero() && !balanceB.isZero()) {
       // Both tokens available - use token A
-      fix_amount_a = true;
+      fixAmountA = true;
       coinAmount = balanceA;
     }
 
@@ -232,16 +248,16 @@ async function executeZap() {
       lowerTick,
       upperTick,
       coinAmount,
-      fix_amount_a,
+      fixAmountA,
       true,
       slippage,
       curSqrtPrice
     );
 
-    const amount_a = fix_amount_a ? coinAmount.toNumber() : liquidityInput.tokenMaxA.toNumber();
-    const amount_b = fix_amount_a ? liquidityInput.tokenMaxB.toNumber() : coinAmount.toNumber();
+    const amountA = fixAmountA ? coinAmount.toNumber() : liquidityInput.tokenMaxA.toNumber();
+    const amountB = fixAmountA ? liquidityInput.tokenMaxB.toNumber() : coinAmount.toNumber();
 
-    console.log(`Calculated amounts - A: ${amount_a}, B: ${amount_b}`);
+    console.log(`Calculated amounts - A: ${amountA}, B: ${amountB}`);
 
     // Step 9: Create add liquidity transaction payload
     console.log('Preparing ZAP transaction...');
@@ -252,9 +268,9 @@ async function executeZap() {
       pool_id: pool.poolAddress,
       tick_lower: lowerTick.toString(),
       tick_upper: upperTick.toString(),
-      fix_amount_a: fix_amount_a,
-      amount_a: amount_a,
-      amount_b: amount_b,
+      fix_amount_a: fixAmountA,
+      amount_a: amountA,
+      amount_b: amountB,
       is_open: true, // Create new position
       pos_id: '', // Empty since we're opening a new position
       collect_fee: false, // Don't collect fees
