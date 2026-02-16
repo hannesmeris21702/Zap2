@@ -16,6 +16,10 @@ A specialized bot for executing ZAP operations on SUI mainnet using the Cetus CL
 - SUI tokens for gas fees
 - Tokens for the target Cetus CLMM pool
 
+## Important Notes
+
+⚠️ **SDK Version**: This bot uses `@mysten/sui.js` v0.34.1 for compatibility with the Cetus SDK. This is the version that Cetus CLMM SDK depends on. Do not upgrade to `@mysten/sui` without testing compatibility.
+
 ## Installation
 
 1. Clone the repository:
@@ -47,9 +51,10 @@ RANGE_PERCENT=5
 ### Environment Variables
 
 - **SUI_RPC_URL**: SUI mainnet RPC endpoint (default: `https://fullnode.mainnet.sui.io:443`)
-- **PRIVATE_KEY**: Your SUI wallet private key (hex format, without 0x prefix)
+- **PRIVATE_KEY**: Your SUI wallet private key (hex format, 64 characters, without 0x prefix)
 - **POOL_ID**: The Cetus CLMM pool ID where you want to add liquidity
 - **RANGE_PERCENT**: The percentage range around current price for the position (e.g., 5 means ±5%)
+- **SLIPPAGE_TOLERANCE** (optional): Maximum slippage tolerance (default: 0.05 = 5%)
 
 ### Finding Pool IDs
 
@@ -136,10 +141,14 @@ Verify the POOL_ID is correct and exists on Cetus mainnet.
 ### "No tokens available in wallet"
 Ensure your wallet has tokens for at least one side of the pool pair.
 
+### "PRIVATE_KEY must be a 64-character hex string"
+Your private key should be exactly 64 hexadecimal characters (32 bytes). Remove any `0x` prefix if present.
+
 ### Transaction fails
 - Check you have enough SUI for gas fees
 - Verify pool is active and not paused
-- Check slippage tolerance (hardcoded to 5%)
+- Adjust SLIPPAGE_TOLERANCE if needed (default: 5%)
+- Ensure you have sufficient token balance for the calculated amounts
 
 ## License
 
